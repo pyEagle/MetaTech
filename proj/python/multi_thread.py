@@ -26,5 +26,7 @@ def multi_thread(thread_num):
     for p in thread_list:
         p.join()
 
-thread_num = 3
-multi_thread(thread_num)
+
+if __name__ == '__main__':
+    thread_num = 3
+    multi_thread(thread_num)
