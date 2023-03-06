@@ -1,0 +1,94 @@
+# -*- coding:utf-8 -*-
+
+import os
+import configparser
+
+import pymongo
+
+
+class MongoHelper:
+    def __init__(self, conf=None):
+        # conf.keys = [mongo_ini, deploy]
+        self.conf = conf
+
+        self.mongo_conf = None
+        self.mongo_client = None
+        
+        self.read_conf()
+
+    def read_conf(self):
+        self.mongo_conf = configparser.ConfigParser()
+        self.mongo_conf.read(self.conf['mongo_ini'], encoding="utf-8")
+
+        self.deploy = self.conf['deploy']
+
+    def mongo_connet(self):
+        port_hort_list = self.mongo_conf.get(self.deploy, 'host_port').split('|')
+
+        return pymongo.MongoClient(port_hort_list, replicaSet='rs0')
+
+    def connet_retry(self, retry=3):
+        mongo_client, flag = None, False
+        for _ in range(retry):
+            try:
+                mongo_client = self.mongo_connet()
+                flag = True
+            except Exception :
+                #pass
+                import traceback
+                traceback.print_exc()
+
+            if flag: break
+
+        return mongo_client
+
+    def check_connet(self, mongo_client, retry=3):
+        if mongo_client is None:
+            mongo_client = self.connet_retry(retry)
+        else:
+            try:
+                mongo_client.server_info()
+            except Exception :
+                mongo_client = self.connet_retry(retry)
+
+        return mongo_client
+       
+    def update_data_by_one(self, filter_dict, update_data, db_name=None, col_name=None):
+        connet = self.check_connet(self.mongo_client)
+        if connet is None:
+            return ret_value
+
+        if db_name is None:
+            db_name = self.mongo_conf.get(self.deploy, 'db_name')
+
+        if col_name is None:
+            col_name = self.mongo_conf.get(self.deploy, 'collection')
+
+        db = connet[db_name]
+        collection = db[col_name]
+        collection.update_one(filter_dict, {'$set': update_data})
+
+    def mongo_find(self, condention_dict, db_name=None, col_name=None):
+        querys = None
+
+        connet = self.check_connet(self.mongo_client)
+        if connet is None:
+            return querys
+
+        if db_name is None:
+            db_name = self.mongo_conf.get(self.deploy, 'db_name')
+
+        if col_name is None:
+            col_name = self.mongo_conf.get(self.deploy, 'collection')
+
+        db = connet[db_name]
+        collection = db[col_name]
+
+        if condention_dict is None:
+            querys = collection.find({})
+        else:
+            if condention_dict and isinstance(condention_dict, dict):
+                querys = collection.find(condention_dict)
+
+        return querys
+
